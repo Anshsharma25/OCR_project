@@ -68,7 +68,6 @@ def parse_invoice_text(text):
     # Totals
     total_pattern = r'TOTAL\s+(.*)'
 
-    # Extract Invoice & Order Identification
     match = re.search(invoice_number_pattern, text, re.IGNORECASE)
     invoice_data['Invoice Number'] = match.group(1).strip() if match else "Not Found"
 
@@ -78,14 +77,12 @@ def parse_invoice_text(text):
     match = re.search(packet_id_pattern, text, re.IGNORECASE)
     invoice_data['Packet/Reference ID'] = match.group(1).strip() if match else "Not Found"
 
-    # Extract Dates
     match = re.search(invoice_date_pattern, text, re.IGNORECASE)
     invoice_data['Invoice Date'] = match.group(1).strip() if match else "Not Found"
 
     match = re.search(order_date_pattern, text, re.IGNORECASE)
     invoice_data['Order Date'] = match.group(1).strip() if match else "Not Found"
 
-    # Extract Transaction Details
     match = re.search(nature_transaction_pattern, text, re.IGNORECASE)
     invoice_data['Nature of Transaction'] = match.group(1).strip() if match else "Not Found"
 
@@ -95,7 +92,7 @@ def parse_invoice_text(text):
     match = re.search(place_supply_pattern, text, re.IGNORECASE)
     invoice_data['Place of Supply'] = match.group(1).strip() if match else "Not Found"
 
-    # Extract Billing Information: "Bl to Ship wo:" block
+    # Extract Bill To details (name and address)
     match = re.search(bill_to_pattern, text, re.IGNORECASE | re.DOTALL)
     if match:
         bill_to_full = match.group(1).strip()
@@ -110,7 +107,7 @@ def parse_invoice_text(text):
         invoice_data['Bill To Name'] = "Not Found"
         invoice_data['Bill To Address'] = "Not Found"
 
-    # Extract Shipping Information: "Bl From: Ship From:" block
+    # Extract Bill From details (name and address)
     match = re.search(bill_from_pattern, text, re.IGNORECASE | re.DOTALL)
     if match:
         bill_from_full = match.group(1).strip()
@@ -125,11 +122,9 @@ def parse_invoice_text(text):
         invoice_data['Bill From Name'] = "Not Found"
         invoice_data['Bill From Address'] = "Not Found"
 
-    # Extract GSTIN Number
     match = re.search(gstin_pattern, text, re.IGNORECASE)
     invoice_data['GSTIN Number'] = match.group(1).strip() if match else "Not Found"
 
-    # Extract Itemized Details
     match = re.search(product_pattern, text, re.IGNORECASE)
     if match:
         invoice_data['Item/Product Code'] = match.group(1).strip()
@@ -141,7 +136,6 @@ def parse_invoice_text(text):
     match = re.search(hsn_pattern, text, re.IGNORECASE)
     invoice_data['HSN/SAC Code'] = match.group(1).strip() if match else "Not Found"
 
-    # Extract Totals
     match = re.search(total_pattern, text, re.IGNORECASE)
     invoice_data['Totals'] = match.group(1).strip() if match else "Not Found"
 
@@ -154,16 +148,13 @@ def download_excel():
     if not invoice_data:
         return jsonify({'error': 'No data to save'}), 400
 
-    # Build ordered groups:
+    # Build ordered groups (Serial Number removed)
     ordered_groups = {
         "Person Details": {
             "Bill To Name": invoice_data.get("Bill To Name", "Not Found"),
             "Bill To Address": invoice_data.get("Bill To Address", "Not Found"),
             "Bill From Name": invoice_data.get("Bill From Name", "Not Found"),
             "Bill From Address": invoice_data.get("Bill From Address", "Not Found")
-        },
-        "Serial Number": {
-            "Serial Number": "1"
         },
         "Invoice & Order Identification": {
             "Invoice Number": invoice_data.get("Invoice Number", "Not Found"),
@@ -198,7 +189,7 @@ def download_excel():
         items = [f"{field}: {fields[field]}" for field in fields]
         grouped_data[group] = ", ".join(items)
 
-    # Create a DataFrame with one row; columns ordered as in ordered_groups
+    # Create a DataFrame with one row; columns are ordered as in ordered_groups
     df = pd.DataFrame([grouped_data], columns=list(ordered_groups.keys()))
     output_path = 'invoice_data.xlsx'
     with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
