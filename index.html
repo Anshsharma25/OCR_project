@@ -2,75 +2,59 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>OCR API Front End</title>
+  <title>OCR Invoice Extraction</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 2em;
-    }
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      margin-top: 1em;
-    }
-    .column {
-      flex: 1;
-      margin: 1em;
-      min-width: 300px;
-    }
-    #result {
-      padding: 1em;
-      border: 1px solid #ccc;
-      white-space: pre-wrap; /* Preserve line breaks */
-    }
-    #imagePreview img {
-      max-width: 100%;
-      height: auto;
-      border: 1px solid #ccc;
-      padding: 5px;
-    }
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    .container { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 1em; }
+    .column { flex: 1; margin: 1em; min-width: 300px; }
+    #result, #invoiceTable { padding: 1em; border: 1px solid #ccc; }
+    #imagePreview img { max-width: 100%; height: auto; border: 1px solid #ccc; padding: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
   </style>
 </head>
 <body>
-  <h1>OCR Image Upload</h1>
+  <h1>OCR Invoice Extraction</h1>
+  
   <form id="uploadForm">
     <input type="file" id="fileInput" name="file" accept="image/*" required>
-    <button type="submit">Extract Text</button>
+    <button type="submit">Extract Invoice</button>
   </form>
 
   <div class="container">
-    <!-- Column for displaying extracted text -->
-    <div class="column">
-      <h2>Extracted Text</h2>
-      <div id="result"></div>
-    </div>
-    <!-- Column for image preview -->
+    <!-- Column for Image Preview -->
     <div class="column">
       <h2>Uploaded Image</h2>
       <div id="imagePreview"></div>
     </div>
+
+    <!-- Column for Extracted Text -->
+    <div class="column">
+      <h2>Extracted Text</h2>
+      <div id="result"></div>
+    </div>
   </div>
 
+  <!-- Invoice Data Table -->
+  <h2>Extracted Invoice Details</h2>
+  <div id="invoiceTable"></div>
+
   <script>
-    // Preview the uploaded image immediately after selection
-    const fileInput = document.getElementById('fileInput');
-    fileInput.addEventListener('change', function(event) {
+    document.getElementById('fileInput').addEventListener('change', function(event) {
       const file = event.target.files[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          document.getElementById('imagePreview').innerHTML =
-            '<img src="' + e.target.result + '" alt="Uploaded Image">';
+          document.getElementById('imagePreview').innerHTML = '<img src="' + e.target.result + '" alt="Uploaded Image">';
         };
         reader.readAsDataURL(file);
       }
     });
 
-    // Handle the form submission and send the image to the OCR API
     document.getElementById('uploadForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const file = fileInput.files[0];
+      const file = document.getElementById('fileInput').files[0];
 
       if (!file) {
         alert("Please select an image file.");
@@ -85,14 +69,27 @@
           method: 'POST',
           body: formData
         });
+
         const data = await response.json();
 
         if (data.error) {
           document.getElementById('result').innerText = "Error: " + data.error;
-        } else {
-          // Display the full extracted text (without filtering out any symbols)
-          document.getElementById('result').innerText = data.extracted_text;
+          return;
         }
+
+        document.getElementById('result').innerText = data.extracted_text;
+
+        // Display Invoice Details in Table Format
+        const invoiceData = data.invoice_data;
+        let tableHTML = "<table><tr><th>Field</th><th>Value</th></tr>";
+
+        for (const key in invoiceData) {
+          tableHTML += `<tr><td>${key}</td><td>${invoiceData[key]}</td></tr>`;
+        }
+        tableHTML += "</table>";
+
+        document.getElementById('invoiceTable').innerHTML = tableHTML;
+
       } catch (error) {
         document.getElementById('result').innerText = "An error occurred: " + error.message;
       }

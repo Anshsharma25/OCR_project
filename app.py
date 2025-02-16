@@ -4,12 +4,16 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import pandas as pd
 import re
+import io
 
 app = Flask(__name__)
 CORS(app)
 
 # Set the Tesseract executable path if not in system PATH
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+# OCR Configuration for better accuracy
+custom_config = r'--oem 3 --psm 6'  # OCR Engine Mode (OEM) & Page Segmentation Mode (PSM)
 
 @app.route('/')
 def home():
@@ -26,15 +30,17 @@ def ocr():
 
     try:
         image = Image.open(file.stream).convert('RGB')
-        extracted_text = pytesseract.image_to_string(image, lang='eng')
+
+        # Extract structured OCR data
+        extracted_text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
 
         # Parse the extracted text to find invoice details
         invoice_data = parse_invoice_text(extracted_text)
 
-        # Save the extracted data to an Excel file
-        save_to_excel(invoice_data, 'invoice_data.xlsx')
+        # Save extracted data to an Excel file
+        excel_data = save_to_excel(invoice_data)
 
-        return jsonify({'extracted_text': extracted_text, 'invoice_data': invoice_data})
+        return jsonify({'extracted_text': extracted_text, 'invoice_data': invoice_data, 'excel_data': excel_data})
 
     except Exception as e:
         print("Error:", str(e))
@@ -42,41 +48,38 @@ def ocr():
 
 def parse_invoice_text(text):
     """
-    Parse the extracted text to find specific invoice details.
-    This function uses regular expressions to locate details like brand name, invoice number, date, and total amount.
+    Extracts structured invoice details using regex patterns.
     """
     invoice_data = {}
 
-    # Example regex patterns (these may need to be adjusted based on the invoice format)
-    brand_name_pattern = r'Brand Name:\s*(.*)'
-    invoice_number_pattern = r'Invoice Number:\s*(\w+)'
-    date_pattern = r'Date:\s*(\d{2}/\d{2}/\d{4})'
-    total_amount_pattern = r'Total Amount:\s*\$?([\d,]+\.\d{2})'
+    patterns = {
+        'Brand Name': r'Brand Name:\s*(.*)',
+        'Invoice Number': r'Invoice Number:\s*(\w+)',
+        'Date': r'Date:\s*(\d{2}/\d{2}/\d{4})',
+        'Total Amount': r'Total Amount:\s*\$?([\d,]+\.\d{2})'
+    }
 
-    # Search for patterns in the text
-    brand_name_match = re.search(brand_name_pattern, text, re.IGNORECASE)
-    invoice_number_match = re.search(invoice_number_pattern, text, re.IGNORECASE)
-    date_match = re.search(date_pattern, text, re.IGNORECASE)
-    total_amount_match = re.search(total_amount_pattern, text, re.IGNORECASE)
-
-    # Extract and store the matched values
-    if brand_name_match:
-        invoice_data['Brand Name'] = brand_name_match.group(1).strip()
-    if invoice_number_match:
-        invoice_data['Invoice Number'] = invoice_number_match.group(1).strip()
-    if date_match:
-        invoice_data['Date'] = date_match.group(1).strip()
-    if total_amount_match:
-        invoice_data['Total Amount'] = total_amount_match.group(1).strip()
+    for key, pattern in patterns.items():
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            invoice_data[key] = match.group(1).strip()
+        else:
+            invoice_data[key] = "Not Found"
 
     return invoice_data
 
-def save_to_excel(data, filename):
+def save_to_excel(data):
     """
-    Save the extracted invoice data to an Excel file.
+    Saves the extracted invoice data to an Excel file and returns the binary data for preview.
     """
     df = pd.DataFrame([data])
-    df.to_excel(filename, index=False)
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Invoice Data')
+
+    output.seek(0)
+    return df.to_dict(orient='records')  # Returning data to be displayed in frontend
 
 if __name__ == '__main__':
     app.run(debug=True)
