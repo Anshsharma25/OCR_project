@@ -32,15 +32,19 @@ Welcome to **Invoice Data Extraction Hub** – a cutting-edge solution to transf
    ```bash
    git clone https://github.com/yourusername/InvoiceExtractionHub.git
    cd InvoiceExtractionHub
+
 Install Python Dependencies:
-
+~~~
 pip install opencv-python pytesseract pandas openpyxl flask
-Configure Tesseract Path:
-Update the Tesseract executable path in your configuration (e.g., in your Python scripts):
+~~~
 
+Configure Tesseract Path:
+~~~
+Update the Tesseract executable path in your configuration (e.g., in your Python scripts):
+~~~
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+~~~
 📁 Project Structure
-graphql
 
 InvoiceExtractionHub/
 ├── app.py                 # Flask API application 🚀
@@ -51,8 +55,10 @@ InvoiceExtractionHub/
 │   └── styles.css         # Custom CSS for frontend 🎨
 ├── output.xlsx            # Auto-generated Excel file 📊
 └── README.md              # This file 📚
+~~~~
 
- #⚡ How It Works
+
+⚡ How It Works
 Image Processing:
 Reads your invoice image and applies grayscale conversion (and optional thresholding) to optimize OCR accuracy.
 
