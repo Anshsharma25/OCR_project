@@ -4,7 +4,6 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import pandas as pd
 import re
-import io
 import os
 
 app = Flask(__name__)
@@ -22,11 +21,9 @@ def home():
 def ocr():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
-
     try:
         image = Image.open(file.stream).convert('RGB')
         extracted_text = pytesseract.image_to_string(image, lang='eng', config=custom_config)
@@ -40,8 +37,8 @@ def ocr():
 
 def parse_invoice_text(text):
     """
-    Extract key invoice fields using regular expressions.
-    Note: Regex patterns may need refinement for different invoice formats.
+    Extract key invoice fields (including bill-to/from details) using regular expressions.
+    Regex patterns may need refinement based on the invoice format.
     """
     invoice_data = {}
 
@@ -59,18 +56,19 @@ def parse_invoice_text(text):
     nature_supply_pattern = r'Nature of Supply:\s*(\w+)'
     place_supply_pattern = r'Place of Supply:\s*([\w\s]+)'
 
-    # Billing & Shipping Information
-    bill_to_pattern = r'Bill to Ship wo:\s*(.*)'
-    bill_from_pattern = r'Bill From:\s*(.*)'
+    # Billing & Shipping Information (multiline capture)
+    bill_to_pattern = r'Bl to Ship wo:\s*(.*?)Bl From:'
+    bill_from_pattern = r'Bl From:\s*(.*?)GSTIN Number:'
     gstin_pattern = r'GSTIN Number:\s*([\w\d]+)'
 
-    # Itemized Details (example for one product line)
+    # Itemized Details
     product_pattern = r'(RDTPCASH[\w\(\)\.\-]+)\s*-\s*(.*?),\s*Size:'
     hsn_pattern = r'HSN:\s*(\d+)'
 
     # Totals
     total_pattern = r'TOTAL\s+(.*)'
 
+    # Extract Invoice & Order Identification
     match = re.search(invoice_number_pattern, text, re.IGNORECASE)
     invoice_data['Invoice Number'] = match.group(1).strip() if match else "Not Found"
 
@@ -80,12 +78,14 @@ def parse_invoice_text(text):
     match = re.search(packet_id_pattern, text, re.IGNORECASE)
     invoice_data['Packet/Reference ID'] = match.group(1).strip() if match else "Not Found"
 
+    # Extract Dates
     match = re.search(invoice_date_pattern, text, re.IGNORECASE)
     invoice_data['Invoice Date'] = match.group(1).strip() if match else "Not Found"
 
     match = re.search(order_date_pattern, text, re.IGNORECASE)
     invoice_data['Order Date'] = match.group(1).strip() if match else "Not Found"
 
+    # Extract Transaction Details
     match = re.search(nature_transaction_pattern, text, re.IGNORECASE)
     invoice_data['Nature of Transaction'] = match.group(1).strip() if match else "Not Found"
 
@@ -95,15 +95,41 @@ def parse_invoice_text(text):
     match = re.search(place_supply_pattern, text, re.IGNORECASE)
     invoice_data['Place of Supply'] = match.group(1).strip() if match else "Not Found"
 
-    match = re.search(bill_to_pattern, text, re.IGNORECASE)
-    invoice_data['Bill To'] = match.group(1).strip() if match else "Not Found"
+    # Extract Billing Information: "Bl to Ship wo:" block
+    match = re.search(bill_to_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        bill_to_full = match.group(1).strip()
+        lines = [line.strip() for line in bill_to_full.splitlines() if line.strip()]
+        if lines:
+            invoice_data['Bill To Name'] = lines[0]
+            invoice_data['Bill To Address'] = " ".join(lines[1:]) if len(lines) > 1 else "Not Found"
+        else:
+            invoice_data['Bill To Name'] = "Not Found"
+            invoice_data['Bill To Address'] = "Not Found"
+    else:
+        invoice_data['Bill To Name'] = "Not Found"
+        invoice_data['Bill To Address'] = "Not Found"
 
-    match = re.search(bill_from_pattern, text, re.IGNORECASE)
-    invoice_data['Bill From/Ship From'] = match.group(1).strip() if match else "Not Found"
+    # Extract Shipping Information: "Bl From: Ship From:" block
+    match = re.search(bill_from_pattern, text, re.IGNORECASE | re.DOTALL)
+    if match:
+        bill_from_full = match.group(1).strip()
+        lines = [line.strip() for line in bill_from_full.splitlines() if line.strip()]
+        if lines:
+            invoice_data['Bill From Name'] = lines[0]
+            invoice_data['Bill From Address'] = " ".join(lines[1:]) if len(lines) > 1 else "Not Found"
+        else:
+            invoice_data['Bill From Name'] = "Not Found"
+            invoice_data['Bill From Address'] = "Not Found"
+    else:
+        invoice_data['Bill From Name'] = "Not Found"
+        invoice_data['Bill From Address'] = "Not Found"
 
+    # Extract GSTIN Number
     match = re.search(gstin_pattern, text, re.IGNORECASE)
     invoice_data['GSTIN Number'] = match.group(1).strip() if match else "Not Found"
 
+    # Extract Itemized Details
     match = re.search(product_pattern, text, re.IGNORECASE)
     if match:
         invoice_data['Item/Product Code'] = match.group(1).strip()
@@ -115,6 +141,7 @@ def parse_invoice_text(text):
     match = re.search(hsn_pattern, text, re.IGNORECASE)
     invoice_data['HSN/SAC Code'] = match.group(1).strip() if match else "Not Found"
 
+    # Extract Totals
     match = re.search(total_pattern, text, re.IGNORECASE)
     invoice_data['Totals'] = match.group(1).strip() if match else "Not Found"
 
@@ -127,8 +154,17 @@ def download_excel():
     if not invoice_data:
         return jsonify({'error': 'No data to save'}), 400
 
-    # Group the data into categories, similar to the front-end grouping
-    groups = {
+    # Build ordered groups:
+    ordered_groups = {
+        "Person Details": {
+            "Bill To Name": invoice_data.get("Bill To Name", "Not Found"),
+            "Bill To Address": invoice_data.get("Bill To Address", "Not Found"),
+            "Bill From Name": invoice_data.get("Bill From Name", "Not Found"),
+            "Bill From Address": invoice_data.get("Bill From Address", "Not Found")
+        },
+        "Serial Number": {
+            "Serial Number": "1"
+        },
         "Invoice & Order Identification": {
             "Invoice Number": invoice_data.get("Invoice Number", "Not Found"),
             "Order Number": invoice_data.get("Order Number", "Not Found"),
@@ -144,8 +180,6 @@ def download_excel():
             "Place of Supply": invoice_data.get("Place of Supply", "Not Found")
         },
         "Billing & Shipping Information": {
-            "Bill To": invoice_data.get("Bill To", "Not Found"),
-            "Bill From/Ship From": invoice_data.get("Bill From/Ship From", "Not Found"),
             "GSTIN Number": invoice_data.get("GSTIN Number", "Not Found")
         },
         "Itemized Details": {
@@ -158,19 +192,14 @@ def download_excel():
         }
     }
 
-    # For each group, build a string with each field on a new line and divider lines in between (except after the last field)
+    # For each group, build a comma-separated string of fields
     grouped_data = {}
-    for group, fields in groups.items():
-        lines = []
-        keys = list(fields.keys())
-        for idx, field in enumerate(keys):
-            lines.append(f"{field}: {fields[field]}")
-            if idx < len(keys) - 1:
-                lines.append("-----------------------------------------")
-        grouped_data[group] = "\n".join(lines)
+    for group, fields in ordered_groups.items():
+        items = [f"{field}: {fields[field]}" for field in fields]
+        grouped_data[group] = ", ".join(items)
 
-    # Create a DataFrame with one row; columns are group names and cells contain the grouped data
-    df = pd.DataFrame([grouped_data])
+    # Create a DataFrame with one row; columns ordered as in ordered_groups
+    df = pd.DataFrame([grouped_data], columns=list(ordered_groups.keys()))
     output_path = 'invoice_data.xlsx'
     with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Invoice Data')

@@ -28,7 +28,6 @@
       <h2>Uploaded Image</h2>
       <div id="imagePreview"></div>
     </div>
-
     <div class="column">
       <h2>Extracted Text</h2>
       <div id="result"></div>
@@ -75,8 +74,17 @@
         document.getElementById('result').innerText = data.extracted_text;
         invoiceData = data.invoice_data;
 
-        // Group the invoice details by category for display
+        // Group the invoice details for display in desired order
         const groups = {
+          "Person Details": {
+            "Bill To Name": invoiceData["Bill To Name"],
+            "Bill To Address": invoiceData["Bill To Address"],
+            "Bill From Name": invoiceData["Bill From Name"],
+            "Bill From Address": invoiceData["Bill From Address"]
+          },
+          "Serial Number": {
+            "Serial Number": "1"
+          },
           "Invoice & Order Identification": {
             "Invoice Number": invoiceData["Invoice Number"],
             "Order Number": invoiceData["Order Number"],
@@ -92,8 +100,6 @@
             "Place of Supply": invoiceData["Place of Supply"]
           },
           "Billing & Shipping Information": {
-            "Bill To": invoiceData["Bill To"],
-            "Bill From/Ship From": invoiceData["Bill From/Ship From"],
             "GSTIN Number": invoiceData["GSTIN Number"]
           },
           "Itemized Details": {
@@ -106,20 +112,18 @@
           }
         };
 
-        // Build a table with groups as columns
+        // Build a table with groups as columns in the desired order
         let tableHTML = "<table><tr>";
         for (const group in groups) {
           tableHTML += `<th>${group}</th>`;
         }
         tableHTML += "</tr><tr>";
         for (const group in groups) {
-          let cellContent = "";
-          // For display, we'll still show each field on a new line with comma separators
           let items = [];
           for (const field in groups[group]) {
             items.push(`${field}: ${groups[group][field]}`);
           }
-          cellContent = items.join(",<br>");
+          const cellContent = items.join(",<br>");
           tableHTML += `<td>${cellContent}</td>`;
         }
         tableHTML += "</tr></table>";
