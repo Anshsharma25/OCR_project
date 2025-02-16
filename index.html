@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>OCR API Front End</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2em;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      margin-top: 1em;
+    }
+    .column {
+      flex: 1;
+      margin: 1em;
+      min-width: 300px;
+    }
+    #result {
+      padding: 1em;
+      border: 1px solid #ccc;
+      white-space: pre-wrap; /* Preserve line breaks */
+    }
+    #imagePreview img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ccc;
+      padding: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>OCR Image Upload</h1>
+  <form id="uploadForm">
+    <input type="file" id="fileInput" name="file" accept="image/*" required>
+    <button type="submit">Extract Text</button>
+  </form>
+
+  <div class="container">
+    <!-- Column for displaying extracted text -->
+    <div class="column">
+      <h2>Extracted Text</h2>
+      <div id="result"></div>
+    </div>
+    <!-- Column for image preview -->
+    <div class="column">
+      <h2>Uploaded Image</h2>
+      <div id="imagePreview"></div>
+    </div>
+  </div>
+
+  <script>
+    // Preview the uploaded image immediately after selection
+    const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('imagePreview').innerHTML =
+            '<img src="' + e.target.result + '" alt="Uploaded Image">';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Handle the form submission and send the image to the OCR API
+    document.getElementById('uploadForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert("Please select an image file.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch('http://localhost:5000/ocr', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+
+        if (data.error) {
+          document.getElementById('result').innerText = "Error: " + data.error;
+        } else {
+          // Display the full extracted text (without filtering out any symbols)
+          document.getElementById('result').innerText = data.extracted_text;
+        }
+      } catch (error) {
+        document.getElementById('result').innerText = "An error occurred: " + error.message;
+      }
+    });
+  </script>
+</body>
+</html>
