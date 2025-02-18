@@ -82,7 +82,6 @@ Description: Accepts an invoice image file and returns extracted data as JSON.
 🎨 Frontend Magic
 Our sleek, responsive frontend makes it super easy to upload invoice images and instantly view the extracted details. Check out our design powered by modern HTML & CSS that puts user experience first! 🌟
 
-
 ![Screenshot 2025-02-16 170546](https://github.com/user-attachments/assets/5065fd31-fb45-4b9a-89e8-3301066edaf9)
 
 🤝 Contributing
